@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PatternScan QC VISION</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Oxanium:wght@400;600;700&display=swap');
+
+        :root {
+            --bg-dark: #060a0d;
+            --bg-panel: #0d1318;
+            --primary: #00d4ff;
+            --success: #00ff88;
+            --danger: #ff3b30;
+            --warning: #ffcc00;
+            --text-muted: #5a7282;
+            --border: rgba(0, 180, 220, 0.12);
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-dark);
+            color: #ffffff;
+            font-family: 'DM Mono', monospace;
+            padding: 20px;
+        }
+
+        h1, h2, .score { font-family: 'Oxanium', sans-serif; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: var(--primary);
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            margin: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .panel {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .panel-title {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .display-box {
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            aspect-ratio: 4/3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .display-box img, .display-box video, .display-box canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .btn-group { display: flex; gap: 10px; }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 6px;
+            border: none;
+            font-family: 'Oxanium', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-outline {
+            background: rgba(0, 212, 255, 0.06);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            color: var(--primary);
+        }
+
+        .btn-outline:hover { background: rgba(0, 212, 255, 0.15); }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #000;
+        }
+
+        .btn-primary:hover { background: #00bfff; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+            box-shadow: 0 0 10px var(--primary);
+            animation: scan 2s linear infinite;
+            display: none;
+        }
+
+        @keyframes scan {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+
+        .result-box { text-align: center; margin-top: 10px; }
+        .score { font-size: 3rem; font-weight: bold; margin: 10px 0; }
+        
+        #fileInput { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>PatternScan // QC VISION</h1>
+        <div id="camStatus" style="color: var(--text-muted); font-size: 0.8rem;">CAMERA: OFFLINE</div>
+    </div>
+
+    <div class="grid">
+        <div class="panel">
+            <div class="panel-title">01 / รูปแบบอ้างอิง (Template)</div>
+            <div class="display-box" onclick="document.getElementById('fileInput').click()">
+                <div id="refPlaceholder" style="color: var(--text-muted); font-size: 0.8rem;">คลิกเพื่ออัปโหลดรูปภาพ</div>
+                <img id="refImage" style="display: none;" />
+            </div>
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">02 / กล้องสแกน (Live Camera)</div>
+            <div class="display-box">
+                <div id="camPlaceholder" style="color: var(--text-muted); font-size: 0.8rem;">กล้องยังไม่เปิด</div>
+                <video id="videoElement" autoplay playsinline style="display: none;"></video>
+                <div class="scan-line" id="scanLine"></div>
+            </div>
+            <div class="btn-group">
+                <button class="btn-outline" id="btnToggleCam">เปิดกล้อง</button>
+                <button class="btn-primary" id="btnScan" disabled>สแกนเปรียบเทียบ</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">03 / ผลการเปรียบเทียบ (Diff Map)</div>
+            <div class="display-box">
+                <canvas id="resultCanvas"></canvas>
+            </div>
+            <div class="result-box" id="resultData" style="display: none;">
+                <div class="panel-title">SIMILARITY SCORE</div>
+                <div class="score" id="scoreDisplay">--%</div>
+                <div id="scoreLabel" style="font-size: 0.9rem;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CW = 320;
+        const CH = 240;
+        
+        // Elements
+        const fileInput = document.getElementById('fileInput');
+        const refImage = document.getElementById('refImage');
+        const refPlaceholder = document.getElementById('refPlaceholder');
+        
+        const videoElement = document.getElementById('videoElement');
+        const camPlaceholder = document.getElementById('camPlaceholder');
+        const scanLine = document.getElementById('scanLine');
+        const btnToggleCam = document.getElementById('btnToggleCam');
+        const btnScan = document.getElementById('btnScan');
+        const camStatus = document.getElementById('camStatus');
+
+        const resultCanvas = document.getElementById('resultCanvas');
+        const ctxResult = resultCanvas.getContext('2d', { willReadFrequently: true });
+        const resultData = document.getElementById('resultData');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const scoreLabel = document.getElementById('scoreLabel');
+
+        resultCanvas.width = CW;
+        resultCanvas.height = CH;
+
+        let stream = null;
+        let isCameraOn = false;
+
+        // 1. จัดการการอัปโหลดรูปภาพอ้างอิง
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                refImage.src = url;
+                refImage.style.display = 'block';
+                refPlaceholder.style.display = 'none';
+                checkReadyToScan();
+            }
+        });
+
+        // 2. จัดการกล้อง (เปิด/ปิด)
+        btnToggleCam.addEventListener('click', async () => {
+            if (isCameraOn) {
+                // ปิดกล้อง
+                stream.getTracks().forEach(track => track.stop());
+                videoElement.srcObject = null;
+                videoElement.style.display = 'none';
+                camPlaceholder.style.display = 'block';
+                scanLine.style.display = 'none';
+                btnToggleCam.innerText = "เปิดกล้อง";
+                camStatus.innerText = "CAMERA: OFFLINE";
+                camStatus.style.color = "var(--text-muted)";
+                isCameraOn = false;
+            } else {
+                // เปิดกล้อง
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    videoElement.srcObject = stream;
+                    videoElement.style.display = 'block';
+                    camPlaceholder.style.display = 'none';
+                    scanLine.style.display = 'block';
+                    btnToggleCam.innerText = "ปิดกล้อง";
+                    camStatus.innerText = "CAMERA: LIVE";
+                    camStatus.style.color = "var(--success)";
+                    isCameraOn = true;
+                } catch (err) {
+                    alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาตรวจสอบการอนุญาตใช้งานกล้อง");
+                }
+            }
+            checkReadyToScan();
+        });
+
+        function checkReadyToScan() {
+            btnScan.disabled = !(isCameraOn && refImage.src);
+        }
+
+        // 3. ระบบสแกนและเปรียบเทียบพิกเซล (Core Logic)
+        btnScan.addEventListener('click', () => {
+            btnScan.innerText = "กำลังประมวลผล...";
+            
+            setTimeout(() => {
+                // สร้าง Canvas ชั่วคราวเพื่อดึงข้อมูลภาพ
+                const tempCanvas1 = document.createElement('canvas');
+                const tempCanvas2 = document.createElement('canvas');
+                tempCanvas1.width = tempCanvas2.width = CW;
+                tempCanvas1.height = tempCanvas2.height = CH;
+                const ctx1 = tempCanvas1.getContext('2d', { willReadFrequently: true });
+                const ctx2 = tempCanvas2.getContext('2d', { willReadFrequently: true });
+
+                // วาดภาพต้นแบบ และ ภาพจากกล้อง ลงในขนาดที่เท่ากัน (320x240)
+                ctx1.drawImage(refImage, 0, 0, CW, CH);
+                ctx2.drawImage(videoElement, 0, 0, CW, CH);
+
+                const imgData1 = ctx1.getImageData(0, 0, CW, CH);
+                const imgData2 = ctx2.getImageData(0, 0, CW, CH);
+                const diffData = ctxResult.createImageData(CW, CH);
+
+                let totalDiff = 0;
+
+                // วนลูปเปรียบเทียบทีละพิกเซล (R, G, B, A)
+                for (let i = 0; i < imgData1.data.length; i += 4) {
+                    const rDiff = Math.abs(imgData1.data[i] - imgData2.data[i]);
+                    const gDiff = Math.abs(imgData1.data[i+1] - imgData2.data[i+1]);
+                    const bDiff = Math.abs(imgData1.data[i+2] - imgData2.data[i+2]);
+                    
+                    const pixDiff = (rDiff + gDiff + bDiff) / 3;
+                    totalDiff += pixDiff;
+
+                    // ระบายสี Diff Map: คล้ายกัน = สีเขียว, ต่างกัน = สีแดง
+                    const intensity = Math.min(255, pixDiff * 3);
+                    diffData.data[i] = intensity;           // Red
+                    diffData.data[i+1] = 255 - intensity;   // Green
+                    diffData.data[i+2] = 0;                 // Blue
+                    diffData.data[i+3] = 255;               // Alpha
+                }
+
+                // วาด Diff Map ลงในหน้าจอที่ 3
+                ctxResult.putImageData(diffData, 0, 0);
+
+                // คำนวณเปอร์เซ็นต์
+                const maxDiff = CW * CH * 255;
+                const similarity = Math.max(0, Math.round(100 - ((totalDiff / maxDiff) * 100 * 2.5))); // *2.5 เพื่อปรับสเกลให้ไวต่อความต่างขึ้น
+
+                showResult(similarity);
+                btnScan.innerText = "สแกนเปรียบเทียบ";
+            }, 100); // ดีเลย์เล็กน้อยให้ UI อัปเดต
+        });
+
+        function showResult(score) {
+            resultData.style.display = 'block';
+            scoreDisplay.innerText = score + '%';
+            
+            let color, label;
+            if (score >= 80) {
+                color = 'var(--success)';
+                label = '✅ ตรงกัน (PASS)';
+            } else if (score >= 50) {
+                color = 'var(--warning)';
+                label = '⚠️ ตรงกันบางส่วน (WARNING)';
+            } else {
+                color = 'var(--danger)';
+                label = '❌ ไม่ตรงกัน (FAIL)';
+            }
+
+            scoreDisplay.style.color = color;
+            scoreLabel.innerText = label;
+            scoreLabel.style.color = color;
+        }
+    </script>
+</body>
+</html>
