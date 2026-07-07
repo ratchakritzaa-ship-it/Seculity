@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PatternScan QC VISION</title>
+    <title>PatternScan QC VISION (RANSAC Optimized)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Oxanium:wght@400;600;700&display=swap');
 
@@ -42,6 +42,12 @@
             font-size: 1.2rem;
             letter-spacing: 2px;
             margin: 0;
+        }
+
+        .status-group {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8rem;
         }
 
         .grid {
@@ -83,10 +89,10 @@
         .display-box img, .display-box video, .display-box canvas {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
         }
 
-        .btn-group { display: flex; gap: 10px; }
+        .btn-group { display: flex; gap: 10px; margin-bottom: 2px; }
 
         button {
             flex: 1;
@@ -110,10 +116,11 @@
         .btn-primary {
             background: var(--primary);
             color: #000;
+            width: 100%;
         }
 
         .btn-primary:hover { background: #00bfff; }
-        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
 
         .scan-line {
             position: absolute;
@@ -133,46 +140,53 @@
         .result-box { text-align: center; margin-top: 10px; }
         .score { font-size: 3rem; font-weight: bold; margin: 10px 0; }
         
-        #fileInput { display: none; }
+        #fileInput, #fileInputTarget { display: none; }
     </style>
+    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()"></script>
 </head>
 <body>
 
     <div class="header">
         <h1>PatternScan // QC VISION</h1>
-        <div id="camStatus" style="color: var(--text-muted); font-size: 0.8rem;">CAMERA: OFFLINE</div>
+        <div class="status-group">
+            <div id="cvStatus" style="color: var(--danger);">ENGINE: LOADING...</div>
+            <div id="camStatus" style="color: var(--text-muted);">CAMERA: OFFLINE</div>
+        </div>
     </div>
 
     <div class="grid">
         <div class="panel">
             <div class="panel-title">01 / รูปแบบอ้างอิง (Template)</div>
             <div class="display-box" onclick="document.getElementById('fileInput').click()">
-                <div id="refPlaceholder" style="color: var(--text-muted); font-size: 0.8rem;">คลิกเพื่ออัปโหลดรูปภาพ</div>
+                <div id="refPlaceholder" style="color: var(--text-muted); font-size: 0.8rem;">คลิกเพื่ออัปโหลดรูปภาพอ้างอิง</div>
                 <img id="refImage" style="display: none;" />
             </div>
             <input type="file" id="fileInput" accept="image/*">
         </div>
 
         <div class="panel">
-            <div class="panel-title">02 / กล้องสแกน (Live Camera)</div>
+            <div class="panel-title">02 / ภาพตรวจทาน (Target / Live Camera)</div>
             <div class="display-box">
-                <div id="camPlaceholder" style="color: var(--text-muted); font-size: 0.8rem;">กล้องยังไม่เปิด</div>
+                <div id="camPlaceholder" style="color: var(--text-muted); font-size: 0.8rem; text-align: center;">เปิดกล้องสด หรือ คลิกปุ่มอัปโหลดภาพด้านล่าง</div>
                 <video id="videoElement" autoplay playsinline style="display: none;"></video>
+                <img id="targetImage" style="display: none;" />
                 <div class="scan-line" id="scanLine"></div>
             </div>
             <div class="btn-group">
                 <button class="btn-outline" id="btnToggleCam">เปิดกล้อง</button>
-                <button class="btn-primary" id="btnScan" disabled>สแกนเปรียบเทียบ</button>
+                <button class="btn-outline" id="btnUploadTarget" onclick="document.getElementById('fileInputTarget').click()">อัปโหลดภาพ</button>
             </div>
+            <button class="btn-primary" id="btnScan" disabled>สแกนเปรียบเทียบ</button>
+            <input type="file" id="fileInputTarget" accept="image/*">
         </div>
 
         <div class="panel">
-            <div class="panel-title">03 / ผลการเปรียบเทียบ (Diff Map)</div>
+            <div class="panel-title">03 / ผลการจับคู่จุดเด่น (Feature Matching)</div>
             <div class="display-box">
                 <canvas id="resultCanvas"></canvas>
             </div>
             <div class="result-box" id="resultData" style="display: none;">
-                <div class="panel-title">SIMILARITY SCORE</div>
+                <div class="panel-title">MATCHING SCORE</div>
                 <div class="score" id="scoreDisplay">--%</div>
                 <div id="scoreLabel" style="font-size: 0.9rem;"></div>
             </div>
@@ -183,17 +197,19 @@
         const CW = 320;
         const CH = 240;
         
-        // Elements
         const fileInput = document.getElementById('fileInput');
         const refImage = document.getElementById('refImage');
         const refPlaceholder = document.getElementById('refPlaceholder');
         
         const videoElement = document.getElementById('videoElement');
+        const targetImage = document.getElementById('targetImage');
+        const fileInputTarget = document.getElementById('fileInputTarget');
         const camPlaceholder = document.getElementById('camPlaceholder');
         const scanLine = document.getElementById('scanLine');
         const btnToggleCam = document.getElementById('btnToggleCam');
         const btnScan = document.getElementById('btnScan');
         const camStatus = document.getElementById('camStatus');
+        const cvStatus = document.getElementById('cvStatus');
 
         const resultCanvas = document.getElementById('resultCanvas');
         const ctxResult = resultCanvas.getContext('2d', { willReadFrequently: true });
@@ -201,39 +217,48 @@
         const scoreDisplay = document.getElementById('scoreDisplay');
         const scoreLabel = document.getElementById('scoreLabel');
 
-        resultCanvas.width = CW;
-        resultCanvas.height = CH;
-
         let stream = null;
         let isCameraOn = false;
+        let isOpenCvReady = false;
 
-        // 1. จัดการการอัปโหลดรูปภาพอ้างอิง
+        function onOpenCvReady() {
+            isOpenCvReady = true;
+            cvStatus.innerText = "ENGINE: VISION READY";
+            cvStatus.style.color = "var(--success)";
+            checkReadyToScan();
+        }
+
+        // อัปโหลดฝั่ง Template
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                const url = URL.createObjectURL(file);
-                refImage.src = url;
+                refImage.src = URL.createObjectURL(file);
                 refImage.style.display = 'block';
                 refPlaceholder.style.display = 'none';
                 checkReadyToScan();
             }
         });
 
-        // 2. จัดการกล้อง (เปิด/ปิด)
+        // อัปโหลดฝั่ง Target
+        fileInputTarget.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                if (isCameraOn) stopCamera();
+                targetImage.src = URL.createObjectURL(file);
+                targetImage.style.display = 'block';
+                camPlaceholder.style.display = 'none';
+                scanLine.style.display = 'block'; 
+                checkReadyToScan();
+            }
+        });
+
+        // ควบคุมระบบกล้อง
         btnToggleCam.addEventListener('click', async () => {
             if (isCameraOn) {
-                // ปิดกล้อง
-                stream.getTracks().forEach(track => track.stop());
-                videoElement.srcObject = null;
-                videoElement.style.display = 'none';
-                camPlaceholder.style.display = 'block';
-                scanLine.style.display = 'none';
-                btnToggleCam.innerText = "เปิดกล้อง";
-                camStatus.innerText = "CAMERA: OFFLINE";
-                camStatus.style.color = "var(--text-muted)";
-                isCameraOn = false;
+                stopCamera();
             } else {
-                // เปิดกล้อง
+                targetImage.style.display = 'none';
+                targetImage.src = '';
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                     videoElement.srcObject = stream;
@@ -245,66 +270,149 @@
                     camStatus.style.color = "var(--success)";
                     isCameraOn = true;
                 } catch (err) {
-                    alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาตรวจสอบการอนุญาตใช้งานกล้อง");
+                    alert("ไม่สามารถเข้าถึงกล้องได้");
                 }
             }
             checkReadyToScan();
         });
 
-        function checkReadyToScan() {
-            btnScan.disabled = !(isCameraOn && refImage.src);
+        function stopCamera() {
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            videoElement.srcObject = null;
+            videoElement.style.display = 'none';
+            camPlaceholder.style.display = 'block';
+            scanLine.style.display = 'none';
+            btnToggleCam.innerText = "เปิดกล้อง";
+            camStatus.innerText = "CAMERA: OFFLINE";
+            camStatus.style.color = "var(--text-muted)";
+            isCameraOn = false;
         }
 
-        // 3. ระบบสแกนและเปรียบเทียบพิกเซล (Core Logic)
+        function checkReadyToScan() {
+            const hasRef = !!refImage.src;
+            const hasTarget = isCameraOn || (!!targetImage.src && targetImage.style.display !== 'none');
+            btnScan.disabled = !(hasRef && hasTarget && isOpenCvReady);
+        }
+
+        // Core Vision Engine: ระบบจับคู่จุดสำคัญและกรองสิ่งกีดขวางด้วยคณิตศาสตร์ RANSAC
         btnScan.addEventListener('click', () => {
-            btnScan.innerText = "กำลังประมวลผล...";
+            btnScan.innerText = "กำลังคำนวณโครงสร้าง...";
             
             setTimeout(() => {
-                // สร้าง Canvas ชั่วคราวเพื่อดึงข้อมูลภาพ
-                const tempCanvas1 = document.createElement('canvas');
-                const tempCanvas2 = document.createElement('canvas');
-                tempCanvas1.width = tempCanvas2.width = CW;
-                tempCanvas1.height = tempCanvas2.height = CH;
-                const ctx1 = tempCanvas1.getContext('2d', { willReadFrequently: true });
-                const ctx2 = tempCanvas2.getContext('2d', { willReadFrequently: true });
+                try {
+                    let matRef = cv.imread(refImage);
+                    let matTarget = new cv.Mat();
 
-                // วาดภาพต้นแบบ และ ภาพจากกล้อง ลงในขนาดที่เท่ากัน (320x240)
-                ctx1.drawImage(refImage, 0, 0, CW, CH);
-                ctx2.drawImage(videoElement, 0, 0, CW, CH);
+                    if (isCameraOn) {
+                        let tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = videoElement.videoWidth || CW;
+                        tempCanvas.height = videoElement.videoHeight || CH;
+                        tempCanvas.getContext('2d').drawImage(videoElement, 0, 0, tempCanvas.width, tempCanvas.height);
+                        matTarget = cv.imread(tempCanvas);
+                    } else {
+                        matTarget = cv.imread(targetImage);
+                    }
 
-                const imgData1 = ctx1.getImageData(0, 0, CW, CH);
-                const imgData2 = ctx2.getImageData(0, 0, CW, CH);
-                const diffData = ctxResult.createImageData(CW, CH);
+                    let grayRef = new cv.Mat();
+                    let grayTarget = new cv.Mat();
+                    cv.cvtColor(matRef, grayRef, cv.COLOR_RGBA2GRAY);
+                    cv.cvtColor(matTarget, grayTarget, cv.COLOR_RGBA2GRAY);
 
-                let totalDiff = 0;
+                    // เรียกใช้ฟังก์ชัน ORB เพื่อทำการ Detect หาขอบและจุดเด่นของชิ้นงาน
+                    let orb = new cv.ORB(500); 
+                    let keypointsRef = new cv.KeyPointVector();
+                    let keypointsTarget = new cv.KeyPointVector();
+                    let descriptorsRef = new cv.Mat();
+                    let descriptorsTarget = new cv.Mat();
 
-                // วนลูปเปรียบเทียบทีละพิกเซล (R, G, B, A)
-                for (let i = 0; i < imgData1.data.length; i += 4) {
-                    const rDiff = Math.abs(imgData1.data[i] - imgData2.data[i]);
-                    const gDiff = Math.abs(imgData1.data[i+1] - imgData2.data[i+1]);
-                    const bDiff = Math.abs(imgData1.data[i+2] - imgData2.data[i+2]);
-                    
-                    const pixDiff = (rDiff + gDiff + bDiff) / 3;
-                    totalDiff += pixDiff;
+                    orb.detectAndCompute(grayRef, new cv.Mat(), keypointsRef, descriptorsRef);
+                    orb.detectAndCompute(grayTarget, new cv.Mat(), keypointsTarget, descriptorsTarget);
 
-                    // ระบายสี Diff Map: คล้ายกัน = สีเขียว, ต่างกัน = สีแดง
-                    const intensity = Math.min(255, pixDiff * 3);
-                    diffData.data[i] = intensity;           // Red
-                    diffData.data[i+1] = 255 - intensity;   // Green
-                    diffData.data[i+2] = 0;                 // Blue
-                    diffData.data[i+3] = 255;               // Alpha
+                    let similarity = 0;
+                    let imMatches = new cv.Mat();
+
+                    if (!descriptorsRef.empty() && !descriptorsTarget.empty()) {
+                        let matcher = new cv.BFMatcher(cv.NORM_HAMMING, true);
+                        let matches = new cv.DMatchVector();
+                        matcher.match(descriptorsRef, descriptorsTarget, matches);
+
+                        let goodMatches = new cv.DMatchVector();
+                        for (let i = 0; i < matches.size(); i++) {
+                            if (matches.get(i).distance < 70) { 
+                                goodMatches.push_back(matches.get(i));
+                            }
+                        }
+
+                        // 🔥 หัวใจหลัก: คัดกรองโมเดลเรขาคณิตด้วย RANSAC เพื่อตัดปัญหาสายเส้นมั่วซั่ว
+                        if (goodMatches.size() >= 3) {
+                            let srcPts = [];
+                            let dstPts = [];
+                            for (let i = 0; i < goodMatches.size(); i++) {
+                                let m = goodMatches.get(i);
+                                srcPts.push(keypointsRef.get(m.queryIdx).pt.x);
+                                srcPts.push(keypointsRef.get(m.queryIdx).pt.y);
+                                dstPts.push(keypointsTarget.get(m.trainIdx).pt.x);
+                                dstPts.push(keypointsTarget.get(m.trainIdx).pt.y);
+                            }
+
+                            let srcMat = cv.matFromArray(srcPts.length / 2, 1, cv.CV_32FC2, srcPts);
+                            let dstMat = cv.matFromArray(dstPts.length / 2, 1, cv.CV_32FC2, dstPts);
+                            let mask = new cv.Mat();
+
+                            // ค้นหาการบิดเบี้ยวเชิงระนาบ (Homography) ถ้าวัตถุชิ้นเดียวกัน เส้นจับคู่ต้องขนานและเรียงตัวไปในทางเดียวกัน
+                            let H = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5.0, mask);
+
+                            let inlierMatches = new cv.DMatchVector();
+                            let inlierCount = 0;
+
+                            if (!H.empty()) {
+                                for (let i = 0; i < mask.rows; i++) {
+                                    if (mask.data[i] === 1) { // ยอมรับเฉพาะจุดที่เป็น Inlier (สอดคล้องตามรูปทรง)
+                                        inlierMatches.push_back(goodMatches.get(i));
+                                        inlierCount++;
+                                    }
+                                }
+                            }
+
+                            // ประเมินผลคะแนนความสอดคล้อง
+                            if (inlierCount >= 3) { 
+                                let ratio = inlierCount / Math.min(keypointsRef.size(), 15);
+                                similarity = Math.min(100, Math.round(ratio * 100));
+                            } else {
+                                similarity = 0; // ลวดลายคล้ายกันแต่บิดเบี้ยว ไร้ทิศทาง ให้ล้มเหลวทันที
+                            }
+
+                            // วาดเฉพาะเส้นที่จับคู่สำเร็จแบบไม่เพี้ยนลงบน Canvas
+                            cv.drawMatches(matRef, keypointsRef, matTarget, keypointsTarget, inlierMatches, imMatches);
+                            cv.imshow('resultCanvas', imMatches);
+
+                            srcMat.delete(); dstMat.delete(); mask.delete(); H.delete(); inlierMatches.delete();
+                        } else {
+                            cv.drawMatches(matRef, keypointsRef, matTarget, keypointsTarget, goodMatches, imMatches);
+                            cv.imshow('resultCanvas', imMatches);
+                            similarity = 0;
+                        }
+
+                        goodMatches.delete();
+                        matcher.delete();
+                        matches.delete();
+                    } else {
+                        ctxResult.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+                    }
+
+                    showResult(similarity);
+
+                    // Garbage Collection เพื่อป้องกันหน่วยความจำรั่วไหล (Memory Leak)
+                    matRef.delete(); matTarget.delete(); grayRef.delete(); grayTarget.delete();
+                    orb.delete(); keypointsRef.delete(); keypointsTarget.delete();
+                    descriptorsRef.delete(); descriptorsTarget.delete(); imMatches.delete();
+
+                } catch (err) {
+                    console.error(err);
+                    alert("เกิดข้อผิดพลาดในการคำนวณเชิงเรขาคณิตภาพ");
                 }
-
-                // วาด Diff Map ลงในหน้าจอที่ 3
-                ctxResult.putImageData(diffData, 0, 0);
-
-                // คำนวณเปอร์เซ็นต์
-                const maxDiff = CW * CH * 255;
-                const similarity = Math.max(0, Math.round(100 - ((totalDiff / maxDiff) * 100 * 2.5))); // *2.5 เพื่อปรับสเกลให้ไวต่อความต่างขึ้น
-
-                showResult(similarity);
                 btnScan.innerText = "สแกนเปรียบเทียบ";
-            }, 100); // ดีเลย์เล็กน้อยให้ UI อัปเดต
+            }, 100);
         });
 
         function showResult(score) {
@@ -312,15 +420,15 @@
             scoreDisplay.innerText = score + '%';
             
             let color, label;
-            if (score >= 80) {
+            if (score >= 65) { 
                 color = 'var(--success)';
-                label = '✅ ตรงกัน (PASS)';
-            } else if (score >= 50) {
+                label = '✅ ลักษณะและโครงสร้างตรงกัน (PASS)';
+            } else if (score >= 35) {
                 color = 'var(--warning)';
-                label = '⚠️ ตรงกันบางส่วน (WARNING)';
+                label = '⚠️ โครงสร้างใกล้เคียงแต่สัดส่วนต่างกัน (WARNING)';
             } else {
                 color = 'var(--danger)';
-                label = '❌ ไม่ตรงกัน (FAIL)';
+                label = '❌ ลักษณะและโครงสร้างไม่ตรงกัน (FAIL)';
             }
 
             scoreDisplay.style.color = color;
