@@ -15,3 +15,6 @@ COPY . .
 
 # สั่งรันโดยรองรับ PORT แบบยืดหยุ่นของ Render
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+git add .
+git commit -m "Fix Dockerfile"
+git push origin main
