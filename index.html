@@ -5,140 +5,372 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PatternScan QC VISION (RANSAC Optimized)</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Oxanium:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oxanium:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
         :root {
-            --bg-dark: #060a0d;
-            --bg-panel: #0d1318;
-            --primary: #00d4ff;
-            --success: #00ff88;
-            --danger: #ff3b30;
-            --warning: #ffcc00;
-            --text-muted: #5a7282;
-            --border: rgba(0, 180, 220, 0.12);
+            --bg-dark: #ffffff;
+            --bg-panel: #f1f5f9;
+            --bg-surface: #ffffff;
+            --primary: #0d9488;
+            --primary-hover: #0f766e;
+            --primary-dim: rgba(13, 148, 136, 0.08);
+            --success: #0d9488;
+            --success-dim: rgba(13, 148, 136, 0.08);
+            --danger: #ef4444;
+            --danger-dim: rgba(239, 68, 68, 0.08);
+            --warning: #d97706;
+            --warning-dim: rgba(217, 119, 6, 0.08);
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: rgba(13, 148, 136, 0.15);
+            --border-heavy: rgba(13, 148, 136, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            transition: background-color 0.2s, border-color 0.2s, transform 0.2s;
         }
 
         body {
             margin: 0;
             background-color: var(--bg-dark);
-            color: #ffffff;
-            font-family: 'DM Mono', monospace;
-            padding: 20px;
+            background-image: 
+                linear-gradient(rgba(13, 148, 136, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(13, 148, 136, 0.02) 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            padding: 24px;
+            min-height: 100vh;
         }
 
-        h1, h2, .score { font-family: 'Oxanium', sans-serif; }
+        h1, h2, .score, .tech-font { 
+            font-family: 'Oxanium', sans-serif; 
+        }
+        
+        code, .mono-font {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
 
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 15px;
-            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
         }
 
         .header h1 {
-            color: var(--primary);
-            font-size: 1.2rem;
-            letter-spacing: 2px;
+            color: var(--text-main);
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 1px;
             margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1 span {
+            color: var(--primary);
         }
 
         .status-group {
             display: flex;
-            gap: 15px;
-            font-size: 0.8rem;
+            gap: 16px;
         }
 
-        .grid {
+        .status-badge {
+            background: var(--bg-panel);
+            border: 1px solid #e2e8f0;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 6px currentColor;
+        }
+
+        /* Dashboard Grid Layout */
+        .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
+            grid-template-columns: 380px 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .sidebar-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
         }
 
         .panel {
             background-color: var(--bg-panel);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(30, 41, 59, 0.03);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--text-muted);
+        }
+        
+        .panel.panel-primary::before {
+            background: var(--primary);
         }
 
         .panel-title {
             font-size: 0.75rem;
             color: var(--text-muted);
-            letter-spacing: 2px;
+            letter-spacing: 1.5px;
             text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-title .index {
+            color: var(--primary);
+            font-weight: 700;
         }
 
         .display-box {
-            background-color: var(--bg-dark);
-            border: 1px solid var(--border);
+            background-color: var(--bg-surface);
+            border: 1px dashed #cbd5e1;
             border-radius: 8px;
             aspect-ratio: 4/3;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             overflow: hidden;
             position: relative;
             cursor: pointer;
+            gap: 8px;
+        }
+
+        .display-box:hover {
+            border-color: var(--primary);
+            background-color: var(--primary-dim);
         }
 
         .display-box img, .display-box video, .display-box canvas {
             width: 100%;
             height: 100%;
             object-fit: contain;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
 
-        .btn-group { display: flex; gap: 10px; margin-bottom: 2px; }
+        .placeholder-text {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-align: center;
+            padding: 20px;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .btn-group { 
+            display: flex; 
+            gap: 12px; 
+            margin-top: 14px;
+            margin-bottom: 12px; 
+        }
 
         button {
-            flex: 1;
-            padding: 12px;
-            border-radius: 6px;
-            border: none;
-            font-family: 'Oxanium', sans-serif;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
             font-weight: 600;
+            font-size: 0.85rem;
             cursor: pointer;
-            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .btn-outline {
-            background: rgba(0, 212, 255, 0.06);
-            border: 1px solid rgba(0, 212, 255, 0.3);
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: var(--text-main);
+            flex: 1;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .btn-outline:hover { 
+            background: var(--primary-dim); 
+            border-color: var(--primary);
             color: var(--primary);
         }
 
-        .btn-outline:hover { background: rgba(0, 212, 255, 0.15); }
-
         .btn-primary {
             background: var(--primary);
-            color: #000;
+            border: none;
+            color: #ffffff;
             width: 100%;
+            font-family: 'Oxanium', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25);
         }
 
-        .btn-primary:hover { background: #00bfff; }
-        .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-primary:hover:not(:disabled) { 
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(13, 148, 136, 0.35);
+        }
+        
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(1px);
+        }
+
+        .btn-primary:disabled { 
+            opacity: 0.35; 
+            cursor: not-allowed; 
+            box-shadow: none;
+            background: #cbd5e1;
+            color: #94a3b8;
+        }
 
         .scan-line {
             position: absolute;
             width: 100%;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
             box-shadow: 0 0 10px var(--primary);
-            animation: scan 2s linear infinite;
+            animation: scan 2.5s ease-in-out infinite;
             display: none;
+            z-index: 2;
         }
 
         @keyframes scan {
-            0% { top: 0; }
-            100% { top: 100%; }
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
         }
 
-        .result-box { text-align: center; margin-top: 10px; }
-        .score { font-size: 3rem; font-weight: bold; margin: 10px 0; }
+        /* Analytics Main Panel */
+        .analytics-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%;
+        }
+
+        .result-container {
+            display: grid;
+            grid-template-columns: 1fr 240px;
+            gap: 20px;
+            background: var(--bg-surface);
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+        }
+
+        @media (max-width: 768px) {
+            .result-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .canvas-wrapper {
+            background-color: #0f172a; /* พื้นหลัง Canvas เป็นสีเข้มเพื่อให้เส้นคู่จุดเด่นและคู่สี RANSAC มองเห็นชัดเจนที่สุด */
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            min-height: 300px;
+        }
+
+        #resultCanvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .result-side {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            border-left: 1px solid #e2e8f0;
+            padding-left: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .result-side {
+                border-left: none;
+                border-top: 1px solid #e2e8f0;
+                padding-left: 0;
+                padding-top: 20px;
+            }
+        }
+
+        .score-card {
+            background: var(--bg-panel);
+            border-radius: 12px;
+            padding: 24px 16px;
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.01);
+        }
+
+        .score { 
+            font-size: 3.5rem; 
+            font-weight: 700; 
+            margin: 8px 0;
+            line-height: 1;
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 10px;
+            letter-spacing: 0.5px;
+        }
         
         #fileInput, #fileInputTarget { display: none; }
     </style>
@@ -147,48 +379,84 @@
 <body>
 
     <div class="header">
-        <h1>PatternScan // QC VISION</h1>
+        <h1>PatternScan // <span>QC VISION</span></h1>
         <div class="status-group">
-            <div id="cvStatus" style="color: var(--danger);">ENGINE: LOADING...</div>
-            <div id="camStatus" style="color: var(--text-muted);">CAMERA: OFFLINE</div>
+            <div class="status-badge" id="cvStatusBadge">
+                <span class="status-dot" id="cvDot" style="color: var(--danger); background-color: var(--danger); "></span>
+                <span id="cvStatus" class="mono-font" style="color: var(--text-muted);">ENGINE: LOADING...</span>
+            </div>
+            <div class="status-badge" id="camStatusBadge">
+                <span class="status-dot" id="camDot" style="color: var(--text-muted); background-color: var(--text-muted);"></span>
+                <span id="camStatus" class="mono-font" style="color: var(--text-muted);">CAMERA: OFFLINE</span>
+            </div>
         </div>
     </div>
 
-    <div class="grid">
-        <div class="panel">
-            <div class="panel-title">01 / รูปแบบอ้างอิง (Template)</div>
-            <div class="display-box" onclick="document.getElementById('fileInput').click()">
-                <div id="refPlaceholder" style="color: var(--text-muted); font-size: 0.8rem;">คลิกเพื่ออัปโหลดรูปภาพอ้างอิง</div>
-                <img id="refImage" style="display: none;" />
+    <div class="dashboard-grid">
+        <!-- Sidebar Inputs -->
+        <div class="sidebar-inputs">
+            <!-- Panel 01 -->
+            <div class="panel">
+                <div class="panel-title">
+                    <span>รูปแบบอ้างอิง</span>
+                    <span class="index">REF 01</span>
+                </div>
+                <div class="display-box" onclick="document.getElementById('fileInput').click()">
+                    <div id="refPlaceholder" class="placeholder-text">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:8px; opacity:0.7;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <div>คลิกเพื่ออัปโหลดรูปภาพอ้างอิง</div>
+                    </div>
+                    <img id="refImage" style="display: none;" />
+                </div>
+                <input type="file" id="fileInput" accept="image/*">
             </div>
-            <input type="file" id="fileInput" accept="image/*">
+
+            <!-- Panel 02 -->
+            <div class="panel">
+                <div class="panel-title">
+                    <span>ภาพตรวจทาน</span>
+                    <span class="index">TAR 02</span>
+                </div>
+                <div class="display-box">
+                    <div id="camPlaceholder" class="placeholder-text">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:8px; opacity:0.7;"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        <div>เปิดกล้องสด หรืออัปโหลดภาพตรวจทาน</div>
+                    </div>
+                    <video id="videoElement" autoplay playsinline style="display: none;"></video>
+                    <img id="targetImage" style="display: none;" />
+                    <div class="scan-line" id="scanLine"></div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn-outline" id="btnToggleCam">เปิดกล้อง</button>
+                    <button class="btn-outline" id="btnUploadTarget" onclick="document.getElementById('fileInputTarget').click()">อัปโหลดภาพ</button>
+                </div>
+                <input type="file" id="fileInputTarget" accept="image/*">
+            </div>
         </div>
 
-        <div class="panel">
-            <div class="panel-title">02 / ภาพตรวจทาน (Target / Live Camera)</div>
-            <div class="display-box">
-                <div id="camPlaceholder" style="color: var(--text-muted); font-size: 0.8rem; text-align: center;">เปิดกล้องสด หรือ คลิกปุ่มอัปโหลดภาพด้านล่าง</div>
-                <video id="videoElement" autoplay playsinline style="display: none;"></video>
-                <img id="targetImage" style="display: none;" />
-                <div class="scan-line" id="scanLine"></div>
+        <!-- Main Analytics Area (Panel 03) -->
+        <div class="panel panel-primary" style="height: 100%;">
+            <div class="panel-title">
+                <span>ผลการจับคู่จุดเด่นเชิงโครงสร้าง</span>
+                <span class="index">ANALYTICS 03</span>
             </div>
-            <div class="btn-group">
-                <button class="btn-outline" id="btnToggleCam">เปิดกล้อง</button>
-                <button class="btn-outline" id="btnUploadTarget" onclick="document.getElementById('fileInputTarget').click()">อัปโหลดภาพ</button>
-            </div>
-            <button class="btn-primary" id="btnScan" disabled>สแกนเปรียบเทียบ</button>
-            <input type="file" id="fileInputTarget" accept="image/*">
-        </div>
+            
+            <div class="analytics-panel">
+                <button class="btn-primary" id="btnScan" disabled>เริ่มกระบวนการสแกนเปรียบเทียบ</button>
 
-        <div class="panel">
-            <div class="panel-title">03 / ผลการจับคู่จุดเด่น (Feature Matching)</div>
-            <div class="display-box">
-                <canvas id="resultCanvas"></canvas>
-            </div>
-            <div class="result-box" id="resultData" style="display: none;">
-                <div class="panel-title">MATCHING SCORE</div>
-                <div class="score" id="scoreDisplay">--%</div>
-                <div id="scoreLabel" style="font-size: 0.9rem;"></div>
+                <div class="result-container">
+                    <div class="canvas-wrapper">
+                        <canvas id="resultCanvas"></canvas>
+                    </div>
+                    
+                    <div class="result-side">
+                        <div class="score-card" id="resultData" style="visibility: hidden; opacity: 0; transition: opacity 0.3s;">
+                            <div class="panel-title" style="justify-content: center; margin-bottom: 4px;">MATCHING SCORE</div>
+                            <div class="score" id="scoreDisplay">--%</div>
+                            <div id="scoreLabel" class="status-pill">READY</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -208,8 +476,11 @@
         const scanLine = document.getElementById('scanLine');
         const btnToggleCam = document.getElementById('btnToggleCam');
         const btnScan = document.getElementById('btnScan');
+        
         const camStatus = document.getElementById('camStatus');
+        const camDot = document.getElementById('camDot');
         const cvStatus = document.getElementById('cvStatus');
+        const cvDot = document.getElementById('cvDot');
 
         const resultCanvas = document.getElementById('resultCanvas');
         const ctxResult = resultCanvas.getContext('2d', { willReadFrequently: true });
@@ -225,10 +496,11 @@
             isOpenCvReady = true;
             cvStatus.innerText = "ENGINE: VISION READY";
             cvStatus.style.color = "var(--success)";
+            cvDot.style.color = "var(--success)";
+            cvDot.style.backgroundColor = "var(--success)";
             checkReadyToScan();
         }
 
-        // อัปโหลดฝั่ง Template
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -239,7 +511,6 @@
             }
         });
 
-        // อัปโหลดฝั่ง Target
         fileInputTarget.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -252,7 +523,6 @@
             }
         });
 
-        // ควบคุมระบบกล้อง
         btnToggleCam.addEventListener('click', async () => {
             if (isCameraOn) {
                 stopCamera();
@@ -268,6 +538,8 @@
                     btnToggleCam.innerText = "ปิดกล้อง";
                     camStatus.innerText = "CAMERA: LIVE";
                     camStatus.style.color = "var(--success)";
+                    camDot.style.color = "var(--success)";
+                    camDot.style.backgroundColor = "var(--success)";
                     isCameraOn = true;
                 } catch (err) {
                     alert("ไม่สามารถเข้าถึงกล้องได้");
@@ -281,10 +553,12 @@
             videoElement.srcObject = null;
             videoElement.style.display = 'none';
             camPlaceholder.style.display = 'block';
-            scanLine.style.display = 'none';
+            scanLine.style.none = 'none';
             btnToggleCam.innerText = "เปิดกล้อง";
             camStatus.innerText = "CAMERA: OFFLINE";
             camStatus.style.color = "var(--text-muted)";
+            camDot.style.color = "var(--text-muted)";
+            camDot.style.backgroundColor = "var(--text-muted)";
             isCameraOn = false;
         }
 
@@ -294,9 +568,9 @@
             btnScan.disabled = !(hasRef && hasTarget && isOpenCvReady);
         }
 
-        // Core Vision Engine: ระบบจับคู่จุดสำคัญและกรองสิ่งกีดขวางด้วยคณิตศาสตร์ RANSAC
         btnScan.addEventListener('click', () => {
-            btnScan.innerText = "กำลังคำนวณโครงสร้าง...";
+            btnScan.innerText = "กำลังคำนวณโครงสร้างเรขาคณิต (RANSAC PROCESSING)...";
+            btnScan.disabled = true;
             
             setTimeout(() => {
                 try {
@@ -318,7 +592,6 @@
                     cv.cvtColor(matRef, grayRef, cv.COLOR_RGBA2GRAY);
                     cv.cvtColor(matTarget, grayTarget, cv.COLOR_RGBA2GRAY);
 
-                    // เรียกใช้ฟังก์ชัน ORB เพื่อทำการ Detect หาขอบและจุดเด่นของชิ้นงาน
                     let orb = new cv.ORB(500); 
                     let keypointsRef = new cv.KeyPointVector();
                     let keypointsTarget = new cv.KeyPointVector();
@@ -343,7 +616,6 @@
                             }
                         }
 
-                        // 🔥 หัวใจหลัก: คัดกรองโมเดลเรขาคณิตด้วย RANSAC เพื่อตัดปัญหาสายเส้นมั่วซั่ว
                         if (goodMatches.size() >= 3) {
                             let srcPts = [];
                             let dstPts = [];
@@ -359,30 +631,26 @@
                             let dstMat = cv.matFromArray(dstPts.length / 2, 1, cv.CV_32FC2, dstPts);
                             let mask = new cv.Mat();
 
-                            // ค้นหาการบิดเบี้ยวเชิงระนาบ (Homography) ถ้าวัตถุชิ้นเดียวกัน เส้นจับคู่ต้องขนานและเรียงตัวไปในทางเดียวกัน
                             let H = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5.0, mask);
-
                             let inlierMatches = new cv.DMatchVector();
                             let inlierCount = 0;
 
                             if (!H.empty()) {
                                 for (let i = 0; i < mask.rows; i++) {
-                                    if (mask.data[i] === 1) { // ยอมรับเฉพาะจุดที่เป็น Inlier (สอดคล้องตามรูปทรง)
+                                    if (mask.data[i] === 1) { 
                                         inlierMatches.push_back(goodMatches.get(i));
                                         inlierCount++;
                                     }
                                 }
                             }
 
-                            // ประเมินผลคะแนนความสอดคล้อง
                             if (inlierCount >= 3) { 
                                 let ratio = inlierCount / Math.min(keypointsRef.size(), 15);
                                 similarity = Math.min(100, Math.round(ratio * 100));
                             } else {
-                                similarity = 0; // ลวดลายคล้ายกันแต่บิดเบี้ยว ไร้ทิศทาง ให้ล้มเหลวทันที
+                                similarity = 0;
                             }
 
-                            // วาดเฉพาะเส้นที่จับคู่สำเร็จแบบไม่เพี้ยนลงบน Canvas
                             cv.drawMatches(matRef, keypointsRef, matTarget, keypointsTarget, inlierMatches, imMatches);
                             cv.imshow('resultCanvas', imMatches);
 
@@ -402,7 +670,6 @@
 
                     showResult(similarity);
 
-                    // Garbage Collection เพื่อป้องกันหน่วยความจำรั่วไหล (Memory Leak)
                     matRef.delete(); matTarget.delete(); grayRef.delete(); grayTarget.delete();
                     orb.delete(); keypointsRef.delete(); keypointsTarget.delete();
                     descriptorsRef.delete(); descriptorsTarget.delete(); imMatches.delete();
@@ -411,29 +678,36 @@
                     console.error(err);
                     alert("เกิดข้อผิดพลาดในการคำนวณเชิงเรขาคณิตภาพ");
                 }
-                btnScan.innerText = "สแกนเปรียบเทียบ";
+                btnScan.innerText = "เริ่มกระบวนการสแกนเปรียบเทียบ";
+                btnScan.disabled = false;
             }, 100);
         });
 
         function showResult(score) {
-            resultData.style.display = 'block';
+            resultData.style.visibility = 'visible';
+            resultData.style.opacity = '1';
             scoreDisplay.innerText = score + '%';
             
-            let color, label;
+            let color, label, bgColor;
             if (score >= 65) { 
                 color = 'var(--success)';
-                label = '✅ ลักษณะและโครงสร้างตรงกัน (PASS)';
+                bgColor = 'var(--success-dim)';
+                label = 'PASS // โครงสร้างตรงตามมาตรฐาน';
             } else if (score >= 35) {
                 color = 'var(--warning)';
-                label = '⚠️ โครงสร้างใกล้เคียงแต่สัดส่วนต่างกัน (WARNING)';
+                bgColor = 'var(--warning-dim)';
+                label = 'WARNING // สัดส่วนคลาดเคลื่อน';
             } else {
                 color = 'var(--danger)';
-                label = '❌ ลักษณะและโครงสร้างไม่ตรงกัน (FAIL)';
+                bgColor = 'var(--danger-dim)';
+                label = 'FAIL // โครงสร้างไม่ผ่านเกณฑ์';
             }
 
             scoreDisplay.style.color = color;
             scoreLabel.innerText = label;
             scoreLabel.style.color = color;
+            scoreLabel.style.backgroundColor = bgColor;
+            scoreLabel.style.border = `1px solid ${color}`;
         }
     </script>
 </body>
