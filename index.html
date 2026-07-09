@@ -41,7 +41,7 @@
             background-size: 16px 16px;
             color: var(--text-main);
             font-family: 'Inter', sans-serif;
-            padding: 16px 16px 100px 16px; /* เผื่อพื้นที่ด้านล่างให้ปุ่มสแกน */
+            padding: 16px 16px 100px 16px;
             min-height: 100vh;
         }
 
@@ -103,7 +103,6 @@
             display: inline-block;
         }
 
-        /* Dashboard Stack for Mobile */
         .dashboard-grid {
             display: flex;
             flex-direction: column;
@@ -176,6 +175,21 @@
             left: 0;
         }
 
+        /* กรอบช่วยเล็งสำหรับกล้องสด (Overlay Guide) */
+        .camera-guide {
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            width: 80%;
+            height: 80%;
+            border: 2px dashed rgba(13, 148, 136, 0.6);
+            border-radius: 8px;
+            z-index: 3;
+            pointer-events: none;
+            display: none;
+            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.3); /* มาร์กเกอร์บังส่วนนอก */
+        }
+
         .placeholder-text {
             color: var(--text-muted);
             font-size: 0.75rem;
@@ -202,7 +216,7 @@
             align-items: center;
             justify-content: center;
             gap: 6px;
-            min-height: 44px; /* ขนาดขั้นต่ำสำหรับการกดบนมือถือ */
+            min-height: 44px;
         }
 
         .btn-outline {
@@ -212,7 +226,17 @@
             flex: 1;
         }
 
-        /* Sticky Action Bar สำหรับมือถือ */
+        .btn-reset {
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
+            color: var(--danger);
+            padding: 4px 8px;
+            font-size: 0.65rem;
+            min-height: auto;
+            border-radius: 6px;
+            display: none;
+        }
+
         .bottom-action-bar {
             position: fixed;
             bottom: 0;
@@ -253,7 +277,7 @@
             box-shadow: 0 0 8px var(--primary);
             animation: scan 2.2s ease-in-out infinite;
             display: none;
-            z-index: 2;
+            z-index: 4;
         }
 
         @keyframes scan {
@@ -342,11 +366,11 @@
     </div>
 
     <div class="dashboard-grid">
-        <!-- Panel 01: Reference Image -->
         <div class="panel">
             <div class="panel-title">
                 <span>รูปแบบอ้างอิง</span>
-                <span class="index">REF 01</span>
+                <button class="btn-reset" id="btnResetRef" onclick="resetRef(event)">ลบรูป</button>
+                <span class="index" id="refIndex">REF 01</span>
             </div>
             <div class="display-box" onclick="document.getElementById('fileInput').click()">
                 <div id="refPlaceholder" class="placeholder-text">
@@ -358,11 +382,11 @@
             <input type="file" id="fileInput" accept="image/*">
         </div>
 
-        <!-- Panel 02: Target Input -->
         <div class="panel">
             <div class="panel-title">
                 <span>ภาพตรวจทาน</span>
-                <span class="index">TAR 02</span>
+                <button class="btn-reset" id="btnResetTarget" onclick="resetTarget(event)">ลบรูป</button>
+                <span class="index" id="targetIndex">TAR 02</span>
             </div>
             <div class="display-box">
                 <div id="camPlaceholder" class="placeholder-text">
@@ -370,6 +394,7 @@
                     <div>ส่องกล้องสด หรืออัปโหลดรูปถ่าย</div>
                 </div>
                 <video id="videoElement" autoplay playsinline style="display: none;"></video>
+                <div class="camera-guide" id="cameraGuide"></div>
                 <img id="targetImage" style="display: none;" />
                 <div class="scan-line" id="scanLine"></div>
             </div>
@@ -380,7 +405,6 @@
             <input type="file" id="fileInputTarget" accept="image/*">
         </div>
 
-        <!-- Panel 03: Analytics Output -->
         <div class="panel panel-primary">
             <div class="panel-title">
                 <span>ผลการวิเคราะห์เชิงโครงสร้าง</span>
@@ -403,26 +427,27 @@
         </div>
     </div>
 
-    <!-- Sticky Floating Bottom Trigger สำหรับโทรศัพท์มือถือ -->
     <div class="bottom-action-bar">
         <button class="btn-primary" id="btnScan" disabled>เริ่มกระบวนการสแกนเปรียบเทียบ</button>
     </div>
 
     <script>
-        const CW = 320;
-        const CH = 240;
-        
         const fileInput = document.getElementById('fileInput');
         const refImage = document.getElementById('refImage');
         const refPlaceholder = document.getElementById('refPlaceholder');
+        const btnResetRef = document.getElementById('btnResetRef');
+        const refIndex = document.getElementById('refIndex');
         
         const videoElement = document.getElementById('videoElement');
         const targetImage = document.getElementById('targetImage');
         const fileInputTarget = document.getElementById('fileInputTarget');
         const camPlaceholder = document.getElementById('camPlaceholder');
+        const cameraGuide = document.getElementById('cameraGuide');
         const scanLine = document.getElementById('scanLine');
         const btnToggleCam = document.getElementById('btnToggleCam');
         const btnScan = document.getElementById('btnScan');
+        const btnResetTarget = document.getElementById('btnResetTarget');
+        const targetIndex = document.getElementById('targetIndex');
         
         const camStatus = document.getElementById('camStatus');
         const camDot = document.getElementById('camDot');
@@ -453,6 +478,8 @@
                 refImage.src = URL.createObjectURL(file);
                 refImage.style.display = 'block';
                 refPlaceholder.style.display = 'none';
+                btnResetRef.style.display = 'block';
+                refIndex.style.display = 'none';
                 checkReadyToScan();
             }
         });
@@ -465,6 +492,8 @@
                 targetImage.style.display = 'block';
                 camPlaceholder.style.display = 'none';
                 scanLine.style.display = 'block'; 
+                btnResetTarget.style.display = 'block';
+                targetIndex.style.display = 'none';
                 checkReadyToScan();
             }
         });
@@ -475,11 +504,14 @@
             } else {
                 targetImage.style.display = 'none';
                 targetImage.src = '';
+                btnResetTarget.style.display = 'none';
+                targetIndex.style.display = 'block';
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                     videoElement.srcObject = stream;
                     videoElement.style.display = 'block';
                     camPlaceholder.style.display = 'none';
+                    cameraGuide.style.display = 'block'; // แสดงกรอบช่วยเล็ง
                     scanLine.style.display = 'block';
                     btnToggleCam.innerText = "ปิดกล้อง";
                     camStatus.innerText = "CAM: LIVE";
@@ -497,6 +529,7 @@
             if (stream) stream.getTracks().forEach(track => track.stop());
             videoElement.srcObject = null;
             videoElement.style.display = 'none';
+            cameraGuide.style.display = 'none';
             camPlaceholder.style.display = 'block';
             scanLine.style.display = 'none';
             btnToggleCam.innerText = "เปิดกล้องสด";
@@ -506,8 +539,31 @@
             isCameraOn = false;
         }
 
+        function resetRef(event) {
+            event.stopPropagation(); // กันไม่ให้ไปทริกเกอร์คลิกของ Display Box
+            refImage.src = '';
+            refImage.style.display = 'none';
+            refPlaceholder.style.display = 'flex';
+            btnResetRef.style.display = 'none';
+            refIndex.style.display = 'block';
+            fileInput.value = '';
+            checkReadyToScan();
+        }
+
+        function resetTarget(event) {
+            if(event) event.stopPropagation();
+            targetImage.src = '';
+            targetImage.style.display = 'none';
+            camPlaceholder.style.display = 'flex';
+            scanLine.style.display = 'none';
+            btnResetTarget.style.display = 'none';
+            targetIndex.style.display = 'block';
+            fileInputTarget.value = '';
+            checkReadyToScan();
+        }
+
         function checkReadyToScan() {
-            const hasRef = !!refImage.src;
+            const hasRef = !!refImage.src && refImage.style.display !== 'none';
             const hasTarget = isCameraOn || (!!targetImage.src && targetImage.style.display !== 'none');
             btnScan.disabled = !(hasRef && hasTarget && isOpenCvReady);
         }
@@ -516,44 +572,60 @@
             btnScan.innerText = "RANSAC PROCESSING...";
             btnScan.disabled = true;
             
+            // ประกาศตัวแปรไว้ด้านนอกเพื่อให้ block finally เข้าถึงได้ (Memory Leak Prevention)
+            let matRef = null, matTarget = null, grayRef = null, grayTarget = null;
+            let orb = null, keypointsRef = null, keypointsTarget = null;
+            let descriptorsRef = null, descriptorsTarget = null, imMatches = null;
+            let srcMat = null, dstMat = null, mask = null, H = null, inlierMatches = null;
+            let matcher = null, matches = null, goodMatches = null;
+
             setTimeout(() => {
                 try {
-                    let matRef = cv.imread(refImage);
-                    let matTarget = new cv.Mat();
+                    let rawRef = cv.imread(refImage);
+                    let rawTarget = new cv.Mat();
 
                     if (isCameraOn) {
                         let tempCanvas = document.createElement('canvas');
-                        tempCanvas.width = videoElement.videoWidth || CW;
-                        tempCanvas.height = videoElement.videoHeight || CH;
+                        tempCanvas.width = 640; 
+                        tempCanvas.height = 480;
                         tempCanvas.getContext('2d').drawImage(videoElement, 0, 0, tempCanvas.width, tempCanvas.height);
-                        matTarget = cv.imread(tempCanvas);
+                        rawTarget = cv.imread(tempCanvas);
                     } else {
-                        matTarget = cv.imread(targetImage);
+                        rawTarget = cv.imread(targetImage);
                     }
 
-                    let grayRef = new cv.Mat();
-                    let grayTarget = new cv.Mat();
+                    // ปรับขนาดรูปภาพ (Image Resizing) เป็น 640x480 เพื่อประหยัด RAM มือถือ
+                    matRef = new cv.Mat();
+                    matTarget = new cv.Mat();
+                    let dsize = new cv.Size(640, 480);
+                    cv.resize(rawRef, matRef, dsize, 0, 0, cv.INTER_AREA);
+                    cv.resize(rawTarget, matTarget, dsize, 0, 0, cv.INTER_AREA);
+                    
+                    rawRef.delete(); rawTarget.delete(); // ลบรูปภาพขนาดเต็มทันทีเพื่อคืนหน่วยความจำ
+
+                    grayRef = new cv.Mat();
+                    grayTarget = new cv.Mat();
                     cv.cvtColor(matRef, grayRef, cv.COLOR_RGBA2GRAY);
                     cv.cvtColor(matTarget, grayTarget, cv.COLOR_RGBA2GRAY);
 
-                    let orb = new cv.ORB(500); 
-                    let keypointsRef = new cv.KeyPointVector();
-                    let keypointsTarget = new cv.KeyPointVector();
-                    let descriptorsRef = new cv.Mat();
-                    let descriptorsTarget = new cv.Mat();
+                    orb = new cv.ORB(500); 
+                    keypointsRef = new cv.KeyPointVector();
+                    keypointsTarget = new cv.KeyPointVector();
+                    descriptorsRef = new cv.Mat();
+                    descriptorsTarget = new cv.Mat();
 
                     orb.detectAndCompute(grayRef, new cv.Mat(), keypointsRef, descriptorsRef);
                     orb.detectAndCompute(grayTarget, new cv.Mat(), keypointsTarget, descriptorsTarget);
 
                     let similarity = 0;
-                    let imMatches = new cv.Mat();
+                    imMatches = new cv.Mat();
 
                     if (!descriptorsRef.empty() && !descriptorsTarget.empty()) {
-                        let matcher = new cv.BFMatcher(cv.NORM_HAMMING, true);
-                        let matches = new cv.DMatchVector();
+                        matcher = new cv.BFMatcher(cv.NORM_HAMMING, true);
+                        matches = new cv.DMatchVector();
                         matcher.match(descriptorsRef, descriptorsTarget, matches);
 
-                        let goodMatches = new cv.DMatchVector();
+                        goodMatches = new cv.DMatchVector();
                         for (let i = 0; i < matches.size(); i++) {
                             if (matches.get(i).distance < 70) { 
                                 goodMatches.push_back(matches.get(i));
@@ -571,12 +643,12 @@
                                 dstPts.push(keypointsTarget.get(m.trainIdx).pt.y);
                             }
 
-                            let srcMat = cv.matFromArray(srcPts.length / 2, 1, cv.CV_32FC2, srcPts);
-                            let dstMat = cv.matFromArray(dstPts.length / 2, 1, cv.CV_32FC2, dstPts);
-                            let mask = new cv.Mat();
+                            srcMat = cv.matFromArray(srcPts.length / 2, 1, cv.CV_32FC2, srcPts);
+                            dstMat = cv.matFromArray(dstPts.length / 2, 1, cv.CV_32FC2, dstPts);
+                            mask = new cv.Mat();
 
-                            let H = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5.0, mask);
-                            let inlierMatches = new cv.DMatchVector();
+                            H = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5.0, mask);
+                            inlierMatches = new cv.DMatchVector();
                             let inlierCount = 0;
 
                             if (!H.empty()) {
@@ -591,39 +663,36 @@
                             if (inlierCount >= 3) { 
                                 let ratio = inlierCount / Math.min(keypointsRef.size(), 15);
                                 similarity = Math.min(100, Math.round(ratio * 100));
-                            } else {
-                                similarity = 0;
                             }
 
                             cv.drawMatches(matRef, keypointsRef, matTarget, keypointsTarget, inlierMatches, imMatches);
                             cv.imshow('resultCanvas', imMatches);
-
-                            srcMat.delete(); dstMat.delete(); mask.delete(); H.delete(); inlierMatches.delete();
                         } else {
                             cv.drawMatches(matRef, keypointsRef, matTarget, keypointsTarget, goodMatches, imMatches);
                             cv.imshow('resultCanvas', imMatches);
-                            similarity = 0;
                         }
-
-                        goodMatches.delete();
-                        matcher.delete();
-                        matches.delete();
                     } else {
                         ctxResult.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
                     }
 
                     showResult(similarity);
 
-                    matRef.delete(); matTarget.delete(); grayRef.delete(); grayTarget.delete();
-                    orb.delete(); keypointsRef.delete(); keypointsTarget.delete();
-                    descriptorsRef.delete(); descriptorsTarget.delete(); imMatches.delete();
-
                 } catch (err) {
                     console.error(err);
                     alert("เกิดข้อผิดพลาดในการประมวลผลรูปภาพ");
+                } finally {
+                    // การันตีการล้างหน่วยความจำ OpenCV ในบล็อก finally เพื่อความเสถียรสูงสุด
+                    if (matRef) matRef.delete(); if (matTarget) matTarget.delete();
+                    if (grayRef) grayRef.delete(); if (grayTarget) grayTarget.delete();
+                    if (orb) orb.delete(); if (keypointsRef) keypointsRef.delete(); if (keypointsTarget) keypointsTarget.delete();
+                    if (descriptorsRef) descriptorsRef.delete(); if (descriptorsTarget) descriptorsTarget.delete();
+                    if (imMatches) imMatches.delete(); if (srcMat) srcMat.delete(); if (dstMat) dstMat.delete();
+                    if (mask) mask.delete(); if (H) H.delete(); if (inlierMatches) inlierMatches.delete();
+                    if (matcher) matcher.delete(); if (matches) matches.delete(); if (goodMatches) goodMatches.delete();
+
+                    btnScan.innerText = "เริ่มกระบวนการสแกนเปรียบเทียบ";
+                    btnScan.disabled = false;
                 }
-                btnScan.innerText = "เริ่มกระบวนการสแกนเปรียบเทียบ";
-                btnScan.disabled = false;
             }, 100);
         });
 
@@ -652,7 +721,6 @@
             scoreLabel.style.backgroundColor = bgColor;
             scoreLabel.style.border = `1px solid ${color}`;
             
-            // เลื่อนลงมาให้เห็นผลลัพธ์อัตโนมัติบนมือถือ
             resultData.scrollIntoView({ behavior: 'smooth' });
         }
     </script>
