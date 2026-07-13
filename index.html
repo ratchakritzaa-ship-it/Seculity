@@ -2,727 +2,255 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PatternScan QC VISION (RANSAC Optimized)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PatternScan QC VISION (Cyan Dot Matcher)</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oxanium:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
-        :root {
-            --bg-dark: #ffffff;
-            --bg-panel: #f1f5f9;
-            --bg-surface: #ffffff;
-            --primary: #0d9488;
-            --primary-hover: #0f766e;
-            --primary-dim: rgba(13, 148, 136, 0.08);
-            --success: #0d9488;
-            --success-dim: rgba(13, 148, 136, 0.08);
-            --danger: #ef4444;
-            --danger-dim: rgba(239, 68, 68, 0.08);
-            --warning: #d97706;
-            --warning-dim: rgba(217, 119, 6, 0.08);
-            --text-main: #1e293b;
-            --text-muted: #64748b;
-            --border: rgba(13, 148, 136, 0.15);
-            --border-heavy: rgba(13, 148, 136, 0.3);
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Oxanium:wght@700&display=swap');
+        
+        :root { 
+            --primary: #0284c7; 
+            --success: #0d9488; 
+            --danger: #ef4444; 
+            --bg: #f1f5f9; 
         }
-
-        * {
-            box-sizing: border-box;
-            transition: background-color 0.2s, border-color 0.2s;
-            -webkit-tap-highlight-color: transparent;
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: var(--bg); 
+            padding: 16px; 
+            margin: 0; 
         }
-
-        body {
-            margin: 0;
-            background-color: var(--bg-dark);
-            background-image: 
-                linear-gradient(rgba(13, 148, 136, 0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(13, 148, 136, 0.02) 1px, transparent 1px);
-            background-size: 16px 16px;
-            color: var(--text-main);
-            font-family: 'Inter', sans-serif;
-            padding: 16px 16px 100px 16px;
-            min-height: 100vh;
+        
+        .panel { 
+            background: #ffffff; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 14px; 
+            padding: 16px; 
+            margin-bottom: 16px; 
         }
-
-        h1, h2, .score, .tech-font { 
+        
+        .panel-title { 
+            font-size: 0.75rem; 
+            color: #64748b; 
+            font-weight: 700; 
+            margin-bottom: 12px; 
             font-family: 'Oxanium', sans-serif; 
         }
         
-        code, .mono-font {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-        }
-
-        .header {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 10px;
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 14px;
-            margin-bottom: 16px;
-        }
-
-        .header h1 {
-            color: var(--text-main);
-            font-size: 1.25rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            margin: 0;
-        }
-
-        .header h1 span {
-            color: var(--primary);
-        }
-
-        .status-group {
-            display: flex;
-            gap: 10px;
-            width: 100%;
-        }
-
-        .status-badge {
-            background: var(--bg-panel);
-            border: 1px solid #e2e8f0;
-            padding: 6px 10px;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex: 1;
-            justify-content: center;
-        }
-
-        .status-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
-        .dashboard-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .panel {
-            background-color: var(--bg-panel);
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            padding: 16px;
-            box-shadow: 0 2px 8px rgba(30, 41, 59, 0.02);
-            position: relative;
-        }
-
-        .panel::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 100%;
-            background: var(--text-muted);
-            border-top-left-radius: 14px;
-            border-bottom-left-radius: 14px;
-        }
-        
-        .panel.panel-primary::before {
-            background: var(--primary);
-        }
-
-        .panel-title {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            font-weight: 600;
-            margin-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .panel-title .index {
-            color: var(--primary);
-            font-weight: 700;
-        }
-
-        .display-box {
-            background-color: var(--bg-surface);
-            border: 1px dashed #cbd5e1;
-            border-radius: 10px;
-            aspect-ratio: 4/3;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
-            cursor: pointer;
-            gap: 6px;
-        }
-
-        .display-box img, .display-box video, .display-box canvas {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
-
-        /* กรอบช่วยเล็งสำหรับกล้องสด (Overlay Guide) */
-        .camera-guide {
-            position: absolute;
-            top: 10%;
-            left: 10%;
-            width: 80%;
-            height: 80%;
-            border: 2px dashed rgba(13, 148, 136, 0.6);
-            border-radius: 8px;
-            z-index: 3;
-            pointer-events: none;
-            display: none;
-            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.3); /* มาร์กเกอร์บังส่วนนอก */
-        }
-
-        .placeholder-text {
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            text-align: center;
-            padding: 16px;
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        .btn-group { 
+        .display-box { 
+            border: 1px dashed #cbd5e1; 
+            border-radius: 10px; 
+            aspect-ratio: 4/3; 
             display: flex; 
-            gap: 10px; 
-            margin-top: 12px;
-        }
-
-        button {
-            padding: 12px;
-            border-radius: 10px;
-            font-family: 'Inter', sans-serif;
-            font-weight: 600;
-            font-size: 0.8rem;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            min-height: 44px;
-        }
-
-        .btn-outline {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            color: var(--text-main);
-            flex: 1;
-        }
-
-        .btn-reset {
-            background: #fff1f2;
-            border: 1px solid #fecdd3;
-            color: var(--danger);
-            padding: 4px 8px;
-            font-size: 0.65rem;
-            min-height: auto;
-            border-radius: 6px;
-            display: none;
-        }
-
-        .bottom-action-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background: #ffffff;
-            border-top: 1px solid #e2e8f0;
-            padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
-            z-index: 100;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            border: none;
-            color: #ffffff;
-            width: 100%;
-            font-family: 'Oxanium', sans-serif;
-            font-size: 0.95rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.2);
-        }
-
-        .btn-primary:disabled { 
-            opacity: 0.4; 
-            background: #cbd5e1;
-            color: #94a3b8;
-            box-shadow: none;
-        }
-
-        .scan-line {
-            position: absolute;
-            width: 100%;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, var(--primary), transparent);
-            box-shadow: 0 0 8px var(--primary);
-            animation: scan 2.2s ease-in-out infinite;
-            display: none;
-            z-index: 4;
-        }
-
-        @keyframes scan {
-            0% { top: 0%; opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { top: 100%; opacity: 0; }
-        }
-
-        .result-container {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            background: var(--bg-surface);
-            padding: 12px;
-            border-radius: 10px;
-            border: 1px solid #e2e8f0;
-        }
-
-        .canvas-wrapper {
-            background-color: #0f172a;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            aspect-ratio: 4/3;
-            width: 100%;
-        }
-
-        #resultCanvas {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-
-        .result-side {
-            width: 100%;
-        }
-
-        .score-card {
-            background: var(--bg-panel);
-            border-radius: 10px;
-            padding: 16px;
-            width: 100%;
-            border: 1px solid #e2e8f0;
-            text-align: center;
-        }
-
-        .score { 
-            font-size: 2.8rem; 
-            font-weight: 700; 
-            margin: 4px 0;
-            line-height: 1;
-        }
-
-        .status-pill {
-            display: block;
-            padding: 8px;
-            border-radius: 8px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-top: 8px;
-            letter-spacing: 0.5px;
-            text-align: center;
+            align-items: center; 
+            justify-content: center; 
+            overflow: hidden; 
+            position: relative; 
+            background-color: #fafafa;
         }
         
-        #fileInput, #fileInputTarget { display: none; }
+        .display-box img { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+        }
+        
+        .file-input-wrapper {
+            margin-top: 12px;
+            width: 100%;
+        }
+        
+        .btn-primary { 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            width: 100%; 
+            padding: 14px; 
+            border-radius: 12px; 
+            font-family: 'Oxanium', sans-serif; 
+            font-size: 1rem;
+            font-weight: 700; 
+            cursor: pointer; 
+            transition: 0.2s;
+        }
+        
+        .btn-primary:disabled { 
+            background: #cbd5e1; 
+            cursor: not-allowed;
+        }
+        
+        .result-card { 
+            padding: 16px; 
+            border-radius: 10px; 
+            text-align: center; 
+            margin-top: 16px; 
+            display: none; 
+            font-size: 0.9rem;
+        }
     </style>
+    <!-- โหลด OpenCV.js -->
     <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()"></script>
 </head>
 <body>
 
-    <div class="header">
-        <h1>PatternScan // <span>QC MOBILE</span></h1>
-        <div class="status-group">
-            <div class="status-badge" id="cvStatusBadge">
-                <span class="status-dot" id="cvDot" style="background-color: var(--danger);"></span>
-                <span id="cvStatus" class="mono-font" style="color: var(--text-muted);">ENGINE: WAIT</span>
-            </div>
-            <div class="status-badge" id="camStatusBadge">
-                <span class="status-dot" id="camDot" style="background-color: var(--text-muted);"></span>
-                <span id="camStatus" class="mono-font" style="color: var(--text-muted);">CAM: OFF</span>
-            </div>
-        </div>
+    <div class="panel">
+        <div class="panel-title">1. รูปแบบกลุ่มจุดอ้างอิง (REFERENCE)</div>
+        <div class="display-box"><img id="refImage"></div>
+        <input type="file" id="fileInput" class="file-input-wrapper" accept="image/*">
     </div>
 
-    <div class="dashboard-grid">
-        <div class="panel">
-            <div class="panel-title">
-                <span>รูปแบบอ้างอิง</span>
-                <button class="btn-reset" id="btnResetRef" onclick="resetRef(event)">ลบรูป</button>
-                <span class="index" id="refIndex">REF 01</span>
-            </div>
-            <div class="display-box" onclick="document.getElementById('fileInput').click()">
-                <div id="refPlaceholder" class="placeholder-text">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:4px; opacity:0.7;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <div>แตะเพื่ออัปโหลดรูปอ้างอิง</div>
-                </div>
-                <img id="refImage" style="display: none;" />
-            </div>
-            <input type="file" id="fileInput" accept="image/*">
-        </div>
-
-        <div class="panel">
-            <div class="panel-title">
-                <span>ภาพตรวจทาน</span>
-                <button class="btn-reset" id="btnResetTarget" onclick="resetTarget(event)">ลบรูป</button>
-                <span class="index" id="targetIndex">TAR 02</span>
-            </div>
-            <div class="display-box">
-                <div id="camPlaceholder" class="placeholder-text">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:4px; opacity:0.7;"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                    <div>ส่องกล้องสด หรืออัปโหลดรูปถ่าย</div>
-                </div>
-                <video id="videoElement" autoplay playsinline style="display: none;"></video>
-                <div class="camera-guide" id="cameraGuide"></div>
-                <img id="targetImage" style="display: none;" />
-                <div class="scan-line" id="scanLine"></div>
-            </div>
-            <div class="btn-group">
-                <button class="btn-outline" id="btnToggleCam">เปิดกล้องสด</button>
-                <button class="btn-outline" id="btnUploadTarget" onclick="document.getElementById('fileInputTarget').click()">คลังภาพ</button>
-            </div>
-            <input type="file" id="fileInputTarget" accept="image/*">
-        </div>
-
-        <div class="panel panel-primary">
-            <div class="panel-title">
-                <span>ผลการวิเคราะห์เชิงโครงสร้าง</span>
-                <span class="index">RESULT 03</span>
-            </div>
-            
-            <div class="result-container">
-                <div class="canvas-wrapper">
-                    <canvas id="resultCanvas"></canvas>
-                </div>
-                
-                <div class="result-side">
-                    <div class="score-card" id="resultData" style="display: none;">
-                        <div class="panel-title" style="justify-content: center; margin-bottom: 2px;">MATCHING SCORE</div>
-                        <div class="score" id="scoreDisplay">--%</div>
-                        <div id="scoreLabel" class="status-pill">READY</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="panel">
+        <div class="panel-title">2. ภาพตรวจทานหน้างาน (TARGET SCAN)</div>
+        <div class="display-box"><img id="targetImage"></div>
+        <input type="file" id="fileInputTarget" class="file-input-wrapper" accept="image/*">
     </div>
 
-    <div class="bottom-action-bar">
-        <button class="btn-primary" id="btnScan" disabled>เริ่มกระบวนการสแกนเปรียบเทียบ</button>
+    <button class="btn-primary" id="btnScan" disabled>กำลังโหลดเอนจิน...</button>
+
+    <div id="resultCard" class="result-card">
+        <div id="resultText" style="font-weight: 700;"></div>
     </div>
 
     <script>
-        const fileInput = document.getElementById('fileInput');
         const refImage = document.getElementById('refImage');
-        const refPlaceholder = document.getElementById('refPlaceholder');
-        const btnResetRef = document.getElementById('btnResetRef');
-        const refIndex = document.getElementById('refIndex');
-        
-        const videoElement = document.getElementById('videoElement');
         const targetImage = document.getElementById('targetImage');
-        const fileInputTarget = document.getElementById('fileInputTarget');
-        const camPlaceholder = document.getElementById('camPlaceholder');
-        const cameraGuide = document.getElementById('cameraGuide');
-        const scanLine = document.getElementById('scanLine');
-        const btnToggleCam = document.getElementById('btnToggleCam');
         const btnScan = document.getElementById('btnScan');
-        const btnResetTarget = document.getElementById('btnResetTarget');
-        const targetIndex = document.getElementById('targetIndex');
-        
-        const camStatus = document.getElementById('camStatus');
-        const camDot = document.getElementById('camDot');
-        const cvStatus = document.getElementById('cvStatus');
-        const cvDot = document.getElementById('cvDot');
+        const resultCard = document.getElementById('resultCard');
+        const resultText = document.getElementById('resultText');
 
-        const resultCanvas = document.getElementById('resultCanvas');
-        const ctxResult = resultCanvas.getContext('2d', { willReadFrequently: true });
-        const resultData = document.getElementById('resultData');
-        const scoreDisplay = document.getElementById('scoreDisplay');
-        const scoreLabel = document.getElementById('scoreLabel');
-
-        let stream = null;
-        let isCameraOn = false;
-        let isOpenCvReady = false;
+        let isReady = false;
 
         function onOpenCvReady() {
-            isOpenCvReady = true;
-            cvStatus.innerText = "ENGINE: READY";
-            cvStatus.style.color = "var(--success)";
-            cvDot.style.backgroundColor = "var(--success)";
-            checkReadyToScan();
+            isReady = true;
+            btnScan.innerText = "ตรวจสอบจุด (กรองเฉพาะสี Cyan จิ๋ว)";
+            checkReady();
         }
 
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                refImage.src = URL.createObjectURL(file);
-                refImage.style.display = 'block';
-                refPlaceholder.style.display = 'none';
-                btnResetRef.style.display = 'block';
-                refIndex.style.display = 'none';
-                checkReadyToScan();
-            }
-        });
+        document.getElementById('fileInput').onchange = (e) => { 
+            refImage.src = URL.createObjectURL(e.target.files[0]); 
+            checkReady(); 
+        };
+        
+        document.getElementById('fileInputTarget').onchange = (e) => { 
+            targetImage.src = URL.createObjectURL(e.target.files[0]); 
+            checkReady(); 
+        };
 
-        fileInputTarget.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                if (isCameraOn) stopCamera();
-                targetImage.src = URL.createObjectURL(file);
-                targetImage.style.display = 'block';
-                camPlaceholder.style.display = 'none';
-                scanLine.style.display = 'block'; 
-                btnResetTarget.style.display = 'block';
-                targetIndex.style.display = 'none';
-                checkReadyToScan();
-            }
-        });
-
-        btnToggleCam.addEventListener('click', async () => {
-            if (isCameraOn) {
-                stopCamera();
+        function checkReady() { 
+            if (isReady && refImage.src && targetImage.src) {
+                btnScan.disabled = false;
             } else {
-                targetImage.style.display = 'none';
-                targetImage.src = '';
-                btnResetTarget.style.display = 'none';
-                targetIndex.style.display = 'block';
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    videoElement.srcObject = stream;
-                    videoElement.style.display = 'block';
-                    camPlaceholder.style.display = 'none';
-                    cameraGuide.style.display = 'block'; // แสดงกรอบช่วยเล็ง
-                    scanLine.style.display = 'block';
-                    btnToggleCam.innerText = "ปิดกล้อง";
-                    camStatus.innerText = "CAM: LIVE";
-                    camStatus.style.color = "var(--success)";
-                    camDot.style.backgroundColor = "var(--success)";
-                    isCameraOn = true;
-                } catch (err) {
-                    alert("ไม่สามารถเปิดกล้องหลังได้");
+                btnScan.disabled = true;
+            }
+        }
+
+        // ฟังก์ชันรองพื้นหลังขาวป้องกันปัญหาภาพ PNG โปร่งใส
+        function getMatWithWhiteBg(imgElement) {
+            let canvas = document.createElement('canvas');
+            let w = imgElement.naturalWidth || imgElement.width || 320;
+            let h = imgElement.naturalHeight || imgElement.height || 240;
+            canvas.width = w; 
+            canvas.height = h;
+            
+            let ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff'; 
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(imgElement, 0, 0, w, h);
+            
+            return cv.imread(canvas);
+        }
+
+        function getDots(imgElement) {
+            let mat = getMatWithWhiteBg(imgElement);
+            let hsv = new cv.Mat();
+            
+            // แปลงพื้นที่สีภาพเข้าสู่โหมด HSV เพื่อระบุกลุ่มสีอย่างแม่นยำ
+            cv.cvtColor(mat, hsv, cv.COLOR_RGBA2RGB);
+            cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
+            
+            // --- ตั้งค่าตัวกรอง: คัดเลือกเฉพาะเฉดสีฟ้าสว่าง (Cyan) ---
+            let mask = new cv.Mat();
+            let low = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [80, 100, 100, 0]);
+            let high = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [105, 255, 255, 255]);
+            cv.inRange(hsv, low, high, mask);
+            
+            let contours = new cv.MatVector();
+            cv.findContours(mask, contours, new cv.Mat(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            
+            let pts = [];
+            for (let i = 0; i < contours.size(); ++i) {
+                let rect = cv.boundingRect(contours.get(i));
+                let area = rect.width * rect.height;
+                
+                // กรองขนาด: จุดไมโครดอทจะมีขนาดเล็กมาก
+                if (area >= 1 && area <= 300) { 
+                    pts.push({x: rect.x + rect.width/2, y: rect.y + rect.height/2});
                 }
             }
-            checkReadyToScan();
-        });
-
-        function stopCamera() {
-            if (stream) stream.getTracks().forEach(track => track.stop());
-            videoElement.srcObject = null;
-            videoElement.style.display = 'none';
-            cameraGuide.style.display = 'none';
-            camPlaceholder.style.display = 'block';
-            scanLine.style.display = 'none';
-            btnToggleCam.innerText = "เปิดกล้องสด";
-            camStatus.innerText = "CAM: OFF";
-            camStatus.style.color = "var(--text-muted)";
-            camDot.style.backgroundColor = "var(--text-muted)";
-            isCameraOn = false;
-        }
-
-        function resetRef(event) {
-            event.stopPropagation(); // กันไม่ให้ไปทริกเกอร์คลิกของ Display Box
-            refImage.src = '';
-            refImage.style.display = 'none';
-            refPlaceholder.style.display = 'flex';
-            btnResetRef.style.display = 'none';
-            refIndex.style.display = 'block';
-            fileInput.value = '';
-            checkReadyToScan();
-        }
-
-        function resetTarget(event) {
-            if(event) event.stopPropagation();
-            targetImage.src = '';
-            targetImage.style.display = 'none';
-            camPlaceholder.style.display = 'flex';
-            scanLine.style.display = 'none';
-            btnResetTarget.style.display = 'none';
-            targetIndex.style.display = 'block';
-            fileInputTarget.value = '';
-            checkReadyToScan();
-        }
-
-        function checkReadyToScan() {
-            const hasRef = !!refImage.src && refImage.style.display !== 'none';
-            const hasTarget = isCameraOn || (!!targetImage.src && targetImage.style.display !== 'none');
-            btnScan.disabled = !(hasRef && hasTarget && isOpenCvReady);
-        }
-
-        btnScan.addEventListener('click', () => {
-            btnScan.innerText = "RANSAC PROCESSING...";
-            btnScan.disabled = true;
             
-            // ประกาศตัวแปรไว้ด้านนอกเพื่อให้ block finally เข้าถึงได้ (Memory Leak Prevention)
-            let matRef = null, matTarget = null, grayRef = null, grayTarget = null;
-            let orb = null, keypointsRef = null, keypointsTarget = null;
-            let descriptorsRef = null, descriptorsTarget = null, imMatches = null;
-            let srcMat = null, dstMat = null, mask = null, H = null, inlierMatches = null;
-            let matcher = null, matches = null, goodMatches = null;
+            // เคลียร์หน่วยความจำ
+            mat.delete(); hsv.delete(); mask.delete(); low.delete(); high.delete(); contours.delete();
+            return pts;
+        }
+
+        btnScan.onclick = () => {
+            resultCard.style.display = 'none';
+            btnScan.innerText = "กำลังประมวลผล...";
+            btnScan.disabled = true;
 
             setTimeout(() => {
                 try {
-                    let rawRef = cv.imread(refImage);
-                    let rawTarget = new cv.Mat();
-
-                    if (isCameraOn) {
-                        let tempCanvas = document.createElement('canvas');
-                        tempCanvas.width = 640; 
-                        tempCanvas.height = 480;
-                        tempCanvas.getContext('2d').drawImage(videoElement, 0, 0, tempCanvas.width, tempCanvas.height);
-                        rawTarget = cv.imread(tempCanvas);
-                    } else {
-                        rawTarget = cv.imread(targetImage);
+                    let p1 = getDots(refImage);
+                    let p2 = getDots(targetImage);
+                    
+                    resultCard.style.display = 'block';
+                    
+                    // 1. ตรวจสอบจำนวนจุดสี Cyan
+                    if (p1.length !== p2.length || p1.length === 0) {
+                        resultText.innerText = `FAIL // จำนวนจุดไม่เท่ากัน (อ้างอิงพบ ${p1.length} จุด | สแกนเจอ ${p2.length} จุด)`;
+                        resultCard.style.background = 'var(--danger)'; 
+                        resultCard.style.color = 'white';
+                        btnScan.innerText = "ตรวจสอบจุด (กรองเฉพาะสี Cyan จิ๋ว)";
+                        btnScan.disabled = false;
+                        return;
                     }
 
-                    // ปรับขนาดรูปภาพ (Image Resizing) เป็น 640x480 เพื่อประหยัด RAM มือถือ
-                    matRef = new cv.Mat();
-                    matTarget = new cv.Mat();
-                    let dsize = new cv.Size(640, 480);
-                    cv.resize(rawRef, matRef, dsize, 0, 0, cv.INTER_AREA);
-                    cv.resize(rawTarget, matTarget, dsize, 0, 0, cv.INTER_AREA);
-                    
-                    rawRef.delete(); rawTarget.delete(); // ลบรูปภาพขนาดเต็มทันทีเพื่อคืนหน่วยความจำ
+                    // 2. ตรวจสอบตำแหน่งความถูกต้องเชิงพิกัด
+                    let matchCount = 0;
+                    let tolerance = 15; // ระยะคลาดเคลื่อนที่ยอมรับได้
 
-                    grayRef = new cv.Mat();
-                    grayTarget = new cv.Mat();
-                    cv.cvtColor(matRef, grayRef, cv.COLOR_RGBA2GRAY);
-                    cv.cvtColor(matTarget, grayTarget, cv.COLOR_RGBA2GRAY);
-
-                    orb = new cv.ORB(500); 
-                    keypointsRef = new cv.KeyPointVector();
-                    keypointsTarget = new cv.KeyPointVector();
-                    descriptorsRef = new cv.Mat();
-                    descriptorsTarget = new cv.Mat();
-
-                    orb.detectAndCompute(grayRef, new cv.Mat(), keypointsRef, descriptorsRef);
-                    orb.detectAndCompute(grayTarget, new cv.Mat(), keypointsTarget, descriptorsTarget);
-
-                    let similarity = 0;
-                    imMatches = new cv.Mat();
-
-                    if (!descriptorsRef.empty() && !descriptorsTarget.empty()) {
-                        matcher = new cv.BFMatcher(cv.NORM_HAMMING, true);
-                        matches = new cv.DMatchVector();
-                        matcher.match(descriptorsRef, descriptorsTarget, matches);
-
-                        goodMatches = new cv.DMatchVector();
-                        for (let i = 0; i < matches.size(); i++) {
-                            if (matches.get(i).distance < 70) { 
-                                goodMatches.push_back(matches.get(i));
-                            }
-                        }
-
-                        if (goodMatches.size() >= 3) {
-                            let srcPts = [];
-                            let dstPts = [];
-                            for (let i = 0; i < goodMatches.size(); i++) {
-                                let m = goodMatches.get(i);
-                                srcPts.push(keypointsRef.get(m.queryIdx).pt.x);
-                                srcPts.push(keypointsRef.get(m.queryIdx).pt.y);
-                                dstPts.push(keypointsTarget.get(m.trainIdx).pt.x);
-                                dstPts.push(keypointsTarget.get(m.trainIdx).pt.y);
-                            }
-
-                            srcMat = cv.matFromArray(srcPts.length / 2, 1, cv.CV_32FC2, srcPts);
-                            dstMat = cv.matFromArray(dstPts.length / 2, 1, cv.CV_32FC2, dstPts);
-                            mask = new cv.Mat();
-
-                            H = cv.findHomography(srcMat, dstMat, cv.RANSAC, 5.0, mask);
-                            inlierMatches = new cv.DMatchVector();
-                            let inlierCount = 0;
-
-                            if (!H.empty()) {
-                                for (let i = 0; i < mask.rows; i++) {
-                                    if (mask.data[i] === 1) { 
-                                        inlierMatches.push_back(goodMatches.get(i));
-                                        inlierCount++;
-                                    }
+                    p1.forEach(pt1 => {
+                        let matched = false;
+                        p2.forEach(pt2 => {
+                            if (!matched) {
+                                let dist = Math.hypot(pt1.x - pt2.x, pt1.y - pt2.y);
+                                if (dist <= tolerance) {
+                                    matchCount++;
+                                    matched = true;
                                 }
                             }
+                        });
+                    });
 
-                            if (inlierCount >= 3) { 
-                                let ratio = inlierCount / Math.min(keypointsRef.size(), 15);
-                                similarity = Math.min(100, Math.round(ratio * 100));
-                            }
-
-                            cv.drawMatches(matRef, keypointsRef, matTarget, keypointsTarget, inlierMatches, imMatches);
-                            cv.imshow('resultCanvas', imMatches);
-                        } else {
-                            cv.drawMatches(matRef, keypointsRef, matTarget, keypointsTarget, goodMatches, imMatches);
-                            cv.imshow('resultCanvas', imMatches);
-                        }
+                    if (matchCount === p1.length) {
+                        resultText.innerText = `PASS // ผ่าน! ตรวจพบจุดสี Cyan ครบถ้วนและอยู่ในตำแหน่งพิกัดที่ตรงกันทั้งหมด (${matchCount}/${p1.length} จุด)`;
+                        resultCard.style.background = 'var(--success)'; 
+                        resultCard.style.color = 'white';
                     } else {
-                        ctxResult.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+                        resultText.innerText = `FAIL // ตรวจพบจุดสี Cyan ครบ แต่ตำแหน่งพิกัดคลาดเคลื่อน (แมทช์ได้ ${matchCount} จาก ${p1.length} จุด)`;
+                        resultCard.style.background = 'var(--danger)'; 
+                        resultCard.style.color = 'white';
                     }
 
-                    showResult(similarity);
-
                 } catch (err) {
-                    console.error(err);
-                    alert("เกิดข้อผิดพลาดในการประมวลผลรูปภาพ");
-                } finally {
-                    // การันตีการล้างหน่วยความจำ OpenCV ในบล็อก finally เพื่อความเสถียรสูงสุด
-                    if (matRef) matRef.delete(); if (matTarget) matTarget.delete();
-                    if (grayRef) grayRef.delete(); if (grayTarget) grayTarget.delete();
-                    if (orb) orb.delete(); if (keypointsRef) keypointsRef.delete(); if (keypointsTarget) keypointsTarget.delete();
-                    if (descriptorsRef) descriptorsRef.delete(); if (descriptorsTarget) descriptorsTarget.delete();
-                    if (imMatches) imMatches.delete(); if (srcMat) srcMat.delete(); if (dstMat) dstMat.delete();
-                    if (mask) mask.delete(); if (H) H.delete(); if (inlierMatches) inlierMatches.delete();
-                    if (matcher) matcher.delete(); if (matches) matches.delete(); if (goodMatches) goodMatches.delete();
-
-                    btnScan.innerText = "เริ่มกระบวนการสแกนเปรียบเทียบ";
-                    btnScan.disabled = false;
+                    console.error("OpenCV Error:", err);
+                    alert("เกิดข้อผิดพลาดในการประมวลผลระบบภาพ");
                 }
+
+                btnScan.innerText = "ตรวจสอบจุด (กรองเฉพาะสี Cyan จิ๋ว)";
+                btnScan.disabled = false;
             }, 100);
-        });
-
-        function showResult(score) {
-            resultData.style.display = 'block';
-            scoreDisplay.innerText = score + '%';
-            
-            let color, label, bgColor;
-            if (score >= 65) { 
-                color = 'var(--success)';
-                bgColor = 'var(--success-dim)';
-                label = 'PASS // โครงสร้างผ่านเกณฑ์';
-            } else if (score >= 35) {
-                color = 'var(--warning)';
-                bgColor = 'var(--warning-dim)';
-                label = 'WARNING // สัดส่วนคลาดเคลื่อน';
-            } else {
-                color = 'var(--danger)';
-                bgColor = 'var(--danger-dim)';
-                label = 'FAIL // โครงสร้างไม่ถูกต้อง';
-            }
-
-            scoreDisplay.style.color = color;
-            scoreLabel.innerText = label;
-            scoreLabel.style.color = color;
-            scoreLabel.style.backgroundColor = bgColor;
-            scoreLabel.style.border = `1px solid ${color}`;
-            
-            resultData.scrollIntoView({ behavior: 'smooth' });
-        }
+        };
     </script>
 </body>
 </html>
