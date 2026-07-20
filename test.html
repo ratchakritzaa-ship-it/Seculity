@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PatternScan QC VISION (CLAHE Mobile Optimized)</title>
+    <title>PatternScan QC VISION (Robust Engine)</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Oxanium:wght@700&display=swap'); 
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Oxanium:wght@700&display=swap');
+        
         :root { 
             --primary: #0284c7; 
             --success: #0d9488; 
@@ -87,8 +88,9 @@
             font-size: 0.9rem;
         }
     </style>
-    <!-- เปลี่ยนมาใช้ jsDelivr CDN เพื่อให้โหลดเร็วขึ้น ลดปัญหาหน้าต่างค้าง -->
-    <script async src="https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.9.0/dist/opencv.min.js" onload="onOpenCvReady()"></script>
+    
+    <!-- โหลด OpenCV ผ่าน CDN ทางการ -->
+    <script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
 </head>
 <body>
 
@@ -99,7 +101,7 @@
     </div>
 
     <div class="panel">
-        <div class="panel-title">2. ภาพตรวจทานหน้างาน (TARGET SCAN - Mobile Fixed)</div>
+        <div class="panel-title">2. ภาพตรวจทานหน้างาน (TARGET SCAN)</div>
         <div class="display-box"><img id="targetImage"></div>
         <input type="file" id="fileInputTarget" class="file-input-wrapper" accept="image/*" capture="environment">
     </div>
@@ -120,10 +122,28 @@
         let isReady = false;
 
         function onOpenCvReady() {
+            if (isReady) return;
             isReady = true;
-            btnScan.innerText = "ตรวจสอบจุด (Mobile + CLAHE)";
+            btnScan.innerText = "ตรวจสอบจุด (พร้อมใช้งาน)";
             checkReady();
         }
+
+        // ระบบตรวจสอบความพร้อมแบบวนลูป
+        let checkInterval = setInterval(() => {
+            if (typeof cv !== 'undefined' && typeof cv.Mat === 'function') {
+                clearInterval(checkInterval);
+                onOpenCvReady();
+            }
+        }, 300);
+
+        // ระบบตัดรอบแจ้งเตือนหากโหลดเกิน 12 วินาที
+        setTimeout(() => {
+            if (!isReady) {
+                clearInterval(checkInterval);
+                btnScan.innerText = "❌ โหลดเอนจินไม่สำเร็จ (ถูกบล็อก/ไม่มีเน็ต)";
+                btnScan.style.background = "var(--danger)";
+            }
+        }, 12000);
 
         document.getElementById('fileInput').onchange = (e) => { 
             if(e.target.files[0]) {
@@ -183,34 +203,27 @@
             let rgb = new cv.Mat();
             cv.cvtColor(mat, rgb, cv.COLOR_RGBA2RGB);
 
-            // 1. Bilateral Filter เพื่อลดจุดสีรบกวน (Noise) แต่ยังรักษาขอบเขตจุดให้คมชัด
             let filtered = new cv.Mat();
             cv.bilateralFilter(rgb, filtered, 9, 75, 75);
 
-            // 2. แปลงระบบสีเป็น HSV (Hue, Saturation, Value)
             let hsv = new cv.Mat();
             cv.cvtColor(filtered, hsv, cv.COLOR_RGB2HSV);
             
-            // 3. เริ่มขั้นตอน CLAHE (ปรับสมดุลแสงสว่างอัตโนมัติ)
             let hsvPlanes = new cv.MatVector();
-            cv.split(hsv, hsvPlanes); // แยกช่องสี H, S, V ออกจากกัน
+            cv.split(hsv, hsvPlanes);
             
-            let vChannel = hsvPlanes.get(2); // ดึงช่อง V (ความสว่าง) ออกมา
-            
-            // ตั้งค่า CLAHE (Clip Limit 2.0, Grid 8x8)
+            let vChannel = hsvPlanes.get(2);
             let clahe = new cv.CLAHE(2.0, new cv.Size(8, 8)); 
-            clahe.apply(vChannel, vChannel); // ประยุกต์ใช้ CLAHE กับความสว่าง
+            clahe.apply(vChannel, vChannel);
             
-            hsvPlanes.set(2, vChannel); // ใส่ช่อง V ที่ปรับแสงแล้วกลับเข้าไป
-            cv.merge(hsvPlanes, hsv); // รวมช่องสี H, S, V กลับเป็นภาพเดียว
+            hsvPlanes.set(2, vChannel);
+            cv.merge(hsvPlanes, hsv);
             
-            // 4. สกัดหาจุดสี Cyan จากภาพที่เกลี่ยแสงแล้ว
             let mask = new cv.Mat();
             let low = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [75, 50, 50, 0]);
             let high = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [110, 255, 255, 255]);
             cv.inRange(hsv, low, high, mask);
 
-            // 5. Morphological Operations เพื่อลบจุดฝุ่นเล็กๆ ออก
             let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
             cv.morphologyEx(mask, mask, cv.MORPH_OPEN, kernel);
             
@@ -233,7 +246,6 @@
                 }
             }
             
-            // คืนหน่วยความจำ (สำคัญมาก เพื่อไม่ให้เบราว์เซอร์ล่ม)
             mat.delete(); rgb.delete(); filtered.delete(); hsv.delete(); 
             hsvPlanes.delete(); vChannel.delete(); clahe.delete();
             mask.delete(); low.delete(); high.delete(); kernel.delete(); contours.delete();
@@ -257,7 +269,7 @@
                         resultText.innerText = `FAIL // จำนวนจุดไม่เท่ากัน (อ้างอิง: ${p1.length} | สแกน: ${p2.length})`;
                         resultCard.style.background = 'var(--danger)'; 
                         resultCard.style.color = 'white';
-                        btnScan.innerText = "ตรวจสอบจุด (Mobile + CLAHE)";
+                        btnScan.innerText = "ตรวจสอบจุด (พร้อมใช้งาน)";
                         btnScan.disabled = false;
                         return;
                     }
@@ -279,7 +291,7 @@
                     });
 
                     if (matchCount === p1.length) {
-                        resultText.innerText = `PASS // ผ่าน! (${matchCount}/${p1.length} จุดตรงกัน)`;
+                        resultText.innerText = `PASS 100%`;
                         resultCard.style.background = 'var(--success)'; 
                         resultCard.style.color = 'white';
                     } else {
@@ -293,7 +305,7 @@
                     alert("เกิดข้อผิดพลาดในการประมวลผล");
                 }
 
-                btnScan.innerText = "ตรวจสอบจุด (Mobile + CLAHE)";
+                btnScan.innerText = "ตรวจสอบจุด (พร้อมใช้งาน)";
                 btnScan.disabled = false;
             }, 100);
         };
